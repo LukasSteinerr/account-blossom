@@ -16,6 +16,7 @@ export type Database = {
           created_at: string
           game_id: string
           id: string
+          payment_status: string | null
           price: number
           seller_id: string
           status: string | null
@@ -26,6 +27,7 @@ export type Database = {
           created_at?: string
           game_id: string
           id?: string
+          payment_status?: string | null
           price: number
           seller_id: string
           status?: string | null
@@ -36,6 +38,7 @@ export type Database = {
           created_at?: string
           game_id?: string
           id?: string
+          payment_status?: string | null
           price?: number
           seller_id?: string
           status?: string | null
@@ -68,23 +71,67 @@ export type Database = {
         }
         Relationships: []
       }
+      payments: {
+        Row: {
+          amount: number
+          buyer_id: string
+          created_at: string
+          game_code_id: string
+          id: string
+          payment_intent_id: string | null
+          payment_status: string | null
+          platform_fee: number
+        }
+        Insert: {
+          amount: number
+          buyer_id: string
+          created_at?: string
+          game_code_id: string
+          id?: string
+          payment_intent_id?: string | null
+          payment_status?: string | null
+          platform_fee: number
+        }
+        Update: {
+          amount?: number
+          buyer_id?: string
+          created_at?: string
+          game_code_id?: string
+          id?: string
+          payment_intent_id?: string | null
+          payment_status?: string | null
+          platform_fee?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_game_code_id_fkey"
+            columns: ["game_code_id"]
+            isOneToOne: false
+            referencedRelation: "game_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           email: string | null
           full_name: string | null
           id: string
+          stripe_account_id: string | null
           updated_at: string
         }
         Insert: {
           email?: string | null
           full_name?: string | null
           id: string
+          stripe_account_id?: string | null
           updated_at?: string
         }
         Update: {
           email?: string | null
           full_name?: string | null
           id?: string
+          stripe_account_id?: string | null
           updated_at?: string
         }
         Relationships: []
