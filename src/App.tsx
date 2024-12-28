@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import Index from "./pages/Index";
+import Dashboard from "./pages/Dashboard";
 
 const queryClient = new QueryClient();
 
@@ -53,7 +54,7 @@ const App = () => {
               path="/dashboard"
               element={
                 isAuthenticated ? (
-                  <div>Dashboard (Create this component next)</div>
+                  <Dashboard />
                 ) : (
                   <Navigate to="/" replace />
                 )
