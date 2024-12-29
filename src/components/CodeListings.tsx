@@ -8,7 +8,7 @@ import { Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { loadStripe } from "@stripe/stripe-js";
 
-const stripePromise = loadStripe('pk_test_your_publishable_key');
+const stripePromise = loadStripe('pk_test_51OvPwuJlRXqZBZLxXMXLZPxGQGXJWVxVBXZwOBxRPPxvBPFxXHBPPxvBPFxXHBPPxvBPFxXHB');
 
 export function CodeListings() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -40,18 +40,23 @@ export function CodeListings() {
 
   const handleBuyClick = async (gameCodeId: string) => {
     try {
-      const response = await fetch('/functions/v1/create-payment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-        },
-        body: JSON.stringify({ gameCodeId }),
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({
+          title: "Error",
+          description: "Please log in to make a purchase",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('create-payment', {
+        body: { gameCodeId },
       });
 
-      const { clientSecret, error } = await response.json();
-      if (error) throw new Error(error);
+      if (error) throw error;
 
+      const { clientSecret } = data;
       const stripe = await stripePromise;
       if (!stripe) throw new Error('Stripe not loaded');
 

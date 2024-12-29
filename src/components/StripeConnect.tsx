@@ -7,16 +7,11 @@ export function StripeConnect() {
 
   const handleConnect = async () => {
     try {
-      const response = await fetch('/functions/v1/create-connect-account', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-        },
-      });
-
-      const { url, error } = await response.json();
-      if (error) throw new Error(error);
-
+      const { data, error } = await supabase.functions.invoke('create-connect-account');
+      
+      if (error) throw error;
+      
+      const { url } = data;
       window.location.href = url;
     } catch (error) {
       toast({
