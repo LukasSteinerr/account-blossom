@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { loadStripe } from "@stripe/stripe-js";
+import { GameCodeCard } from "./GameCodeCard";
 
 const stripePromise = loadStripe('pk_test_51QCOobGgo79eNf4FUob1l4oJFWOC71UYyZCtmQp4UbH5lzPi2W8xewfBIRNfMRJHaINGMQrMjKgGDi4cm2hP8f4X000aXjneTM');
 
@@ -65,7 +64,7 @@ export function CodeListings() {
 
       toast({
         title: "Success",
-        description: "Payment successful! The seller will be notified.",
+        description: "Payment successful! The code will be revealed shortly.",
       });
     } catch (error) {
       toast({
@@ -95,20 +94,11 @@ export function CodeListings() {
           <p>No game codes found</p>
         ) : (
           listings?.map((listing) => (
-            <Card key={listing.id}>
-              <CardHeader>
-                <CardTitle>{listing.games?.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold mb-4">${listing.price}</p>
-                <Button 
-                  className="w-full"
-                  onClick={() => handleBuyClick(listing.id)}
-                >
-                  Buy Now
-                </Button>
-              </CardContent>
-            </Card>
+            <GameCodeCard
+              key={listing.id}
+              listing={listing}
+              onBuyClick={handleBuyClick}
+            />
           ))
         )}
       </div>
