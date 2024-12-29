@@ -11,35 +11,47 @@ export type Database = {
     Tables: {
       game_codes: {
         Row: {
+          additional_info: string | null
           code_image_url: string | null
           code_text: string | null
+          code_value: number | null
           created_at: string
+          expiration_date: string | null
           game_id: string
           id: string
           payment_status: string | null
           price: number
+          region: string | null
           seller_id: string
           status: string | null
         }
         Insert: {
+          additional_info?: string | null
           code_image_url?: string | null
           code_text?: string | null
+          code_value?: number | null
           created_at?: string
+          expiration_date?: string | null
           game_id: string
           id?: string
           payment_status?: string | null
           price: number
+          region?: string | null
           seller_id: string
           status?: string | null
         }
         Update: {
+          additional_info?: string | null
           code_image_url?: string | null
           code_text?: string | null
+          code_value?: number | null
           created_at?: string
+          expiration_date?: string | null
           game_id?: string
           id?: string
           payment_status?: string | null
           price?: number
+          region?: string | null
           seller_id?: string
           status?: string | null
         }
