@@ -5,9 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { loadStripe } from "@stripe/stripe-js";
+
+const stripePromise = loadStripe('pk_test_your_publishable_key');
 
 export function CodeListings() {
   const [searchTerm, setSearchTerm] = useState("");
+  const { toast } = useToast();
 
   const { data: listings, isLoading } = useQuery({
     queryKey: ["game-codes", searchTerm],
@@ -32,6 +37,39 @@ export function CodeListings() {
       return data;
     },
   });
+
+  const handleBuyClick = async (gameCodeId: string) => {
+    try {
+      const response = await fetch('/functions/v1/create-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+        body: JSON.stringify({ gameCodeId }),
+      });
+
+      const { clientSecret, error } = await response.json();
+      if (error) throw new Error(error);
+
+      const stripe = await stripePromise;
+      if (!stripe) throw new Error('Stripe not loaded');
+
+      const { error: stripeError } = await stripe.confirmCardPayment(clientSecret);
+      if (stripeError) throw stripeError;
+
+      toast({
+        title: "Success",
+        description: "Payment successful! The seller will be notified.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -58,7 +96,12 @@ export function CodeListings() {
               </CardHeader>
               <CardContent>
                 <p className="text-2xl font-bold mb-4">${listing.price}</p>
-                <Button className="w-full">Buy Now</Button>
+                <Button 
+                  className="w-full"
+                  onClick={() => handleBuyClick(listing.id)}
+                >
+                  Buy Now
+                </Button>
               </CardContent>
             </Card>
           ))
