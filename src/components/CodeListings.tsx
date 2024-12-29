@@ -8,7 +8,7 @@ import { Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { loadStripe } from "@stripe/stripe-js";
 
-const stripePromise = loadStripe('pk_test_51OvPwuJlRXqZBZLxXMXLZPxGQGXJWVxVBXZwOBxRPPxvBPFxXHBPPxvBPFxXHBPPxvBPFxXHB');
+const stripePromise = loadStripe('pk_test_51QCOobGgo79eNf4FUob1l4oJFWOC71UYyZCtmQp4UbH5lzPi2W8xewfBIRNfMRJHaINGMQrMjKgGDi4cm2hP8f4X000aXjneTM');
 
 export function CodeListings() {
   const [searchTerm, setSearchTerm] = useState("");
