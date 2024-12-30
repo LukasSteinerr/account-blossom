@@ -52,6 +52,7 @@ serve(async (req) => {
         card_payments: { requested: true },
         transfers: { requested: true },
       },
+      business_type: 'individual',
     })
 
     await supabaseClient
@@ -71,6 +72,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
+    console.error('Error creating connect account:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
