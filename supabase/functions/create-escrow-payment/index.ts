@@ -21,6 +21,7 @@ serve(async (req) => {
 
   try {
     const { gameCodeId } = await req.json()
+    console.log('Processing payment for game code:', gameCodeId)
 
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -33,22 +34,33 @@ serve(async (req) => {
 
     if (!user) throw new Error('Not authenticated')
 
-    // Get game code details
-    const { data: gameCode } = await supabaseClient
+    // First, get the game code details
+    const { data: gameCode, error: gameCodeError } = await supabaseClient
       .from('game_codes')
-      .select(`
-        *,
-        profiles:seller_id (
-          stripe_account_id
-        )
-      `)
+      .select('*, seller_id')
       .eq('id', gameCodeId)
       .single()
 
+    console.log('Game code data:', gameCode)
+    console.log('Game code error:', gameCodeError)
+
+    if (gameCodeError) throw gameCodeError
     if (!gameCode) throw new Error('Game code not found')
     if (gameCode.status !== 'available') throw new Error('Game code not available')
     if (gameCode.payment_status !== 'unpaid') throw new Error('Game code already purchased')
-    if (!gameCode.profiles?.stripe_account_id) throw new Error('Seller not setup for payments')
+
+    // Then, get the seller's profile separately
+    const { data: sellerProfile, error: profileError } = await supabaseClient
+      .from('profiles')
+      .select('stripe_account_id')
+      .eq('id', gameCode.seller_id)
+      .single()
+
+    console.log('Seller profile:', sellerProfile)
+    console.log('Profile error:', profileError)
+
+    if (profileError) throw profileError
+    if (!sellerProfile?.stripe_account_id) throw new Error('Seller not setup for payments')
 
     const platformFee = Math.round(gameCode.price * PLATFORM_FEE_PERCENTAGE * 100)
     const sellerAmount = Math.round(gameCode.price * 100) - platformFee
@@ -59,7 +71,7 @@ serve(async (req) => {
       currency: 'usd',
       application_fee_amount: platformFee,
       transfer_data: {
-        destination: gameCode.profiles.stripe_account_id,
+        destination: sellerProfile.stripe_account_id,
       },
       metadata: {
         gameCodeId,
@@ -68,6 +80,8 @@ serve(async (req) => {
       },
       capture_method: 'manual', // This enables the escrow functionality
     })
+
+    console.log('Created payment intent:', paymentIntent.id)
 
     // Calculate verification deadline
     const verificationDeadline = new Date()
@@ -88,7 +102,7 @@ serve(async (req) => {
     if (updateError) throw updateError
 
     // Create payment record
-    await supabaseClient.from('payments').insert({
+    const { error: paymentError } = await supabaseClient.from('payments').insert({
       game_code_id: gameCodeId,
       buyer_id: user.id,
       amount: gameCode.price,
@@ -96,6 +110,8 @@ serve(async (req) => {
       payment_intent_id: paymentIntent.id,
       payment_status: 'processing'
     })
+
+    if (paymentError) throw paymentError
 
     return new Response(
       JSON.stringify({ 
