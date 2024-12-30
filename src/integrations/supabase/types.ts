@@ -24,10 +24,6 @@ export type Database = {
           region: string | null
           seller_id: string
           status: string | null
-          stripe_payment_intent_id: string | null
-          stripe_transfer_id: string | null
-          verification_deadline: string | null
-          verification_status: string | null
         }
         Insert: {
           additional_info?: string | null
@@ -43,10 +39,6 @@ export type Database = {
           region?: string | null
           seller_id: string
           status?: string | null
-          stripe_payment_intent_id?: string | null
-          stripe_transfer_id?: string | null
-          verification_deadline?: string | null
-          verification_status?: string | null
         }
         Update: {
           additional_info?: string | null
@@ -62,10 +54,6 @@ export type Database = {
           region?: string | null
           seller_id?: string
           status?: string | null
-          stripe_payment_intent_id?: string | null
-          stripe_transfer_id?: string | null
-          verification_deadline?: string | null
-          verification_status?: string | null
         }
         Relationships: [
           {
