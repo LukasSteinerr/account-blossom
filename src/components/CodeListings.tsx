@@ -49,7 +49,7 @@ export function CodeListings() {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('create-payment', {
+      const { data, error } = await supabase.functions.invoke('create-escrow-payment', {
         body: { gameCodeId },
       });
 
@@ -64,7 +64,7 @@ export function CodeListings() {
 
       toast({
         title: "Success",
-        description: "Payment successful! The code will be revealed shortly.",
+        description: "Payment successful! Please verify the code within 24 hours.",
       });
     } catch (error) {
       toast({
