@@ -13,7 +13,7 @@ const corsHeaders = {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
@@ -36,7 +36,7 @@ serve(async (req) => {
 
     if (profile?.stripe_account_id) {
       const account = await stripe.accounts.retrieve(profile.stripe_account_id)
-      if (account.charges_enabled) {
+      if (account.payouts_enabled) {
         return new Response(
           JSON.stringify({ message: 'Account already setup' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -44,15 +44,23 @@ serve(async (req) => {
       }
     }
 
+    // Create a Custom account instead of Express
     const account = await stripe.accounts.create({
-      type: 'express',
+      type: 'custom',
       country: 'US',
       email: user.email,
       capabilities: {
         card_payments: { requested: true },
         transfers: { requested: true },
       },
+      tos_acceptance: {
+        date: Math.floor(Date.now() / 1000),
+        ip: req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip'),
+      },
       business_type: 'individual',
+      business_profile: {
+        product_description: 'Selling unused game codes',
+      },
     })
 
     await supabaseClient
@@ -60,15 +68,10 @@ serve(async (req) => {
       .update({ stripe_account_id: account.id })
       .eq('id', user.id)
 
-    const accountLink = await stripe.accountLinks.create({
-      account: account.id,
-      refresh_url: `${req.headers.get('origin')}/dashboard`,
-      return_url: `${req.headers.get('origin')}/dashboard`,
-      type: 'account_onboarding',
-    })
-
+    // Instead of creating an account link, return the account ID
+    // We'll handle the rest of the onboarding in our UI
     return new Response(
-      JSON.stringify({ url: accountLink.url }),
+      JSON.stringify({ accountId: account.id }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
