@@ -3,7 +3,7 @@ import {
   PaymentElement,
   useStripe,
   useElements
-} from "@stripe/stripe-js";
+} from "@stripe/react-stripe-js";
 import { Button } from "./ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent } from "./ui/dialog";

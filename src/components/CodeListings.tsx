@@ -6,7 +6,7 @@ import { Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { loadStripe } from "@stripe/stripe-js";
 import { GameCodeCard } from "./GameCodeCard";
-import { Elements } from "@stripe/stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
 import { PaymentForm } from "./PaymentForm";
 
 const stripePromise = loadStripe(process.env.STRIPE_PUBLISHABLE_KEY || 'pk_test_51QCOobGgo79eNf4FUob1l4oJFWOC71UYyZCtmQp4UbH5lzPi2W8xewfBIRNfMRJHaINGMQrMjKgGDi4cm2hP8f4X000aXjneTM');
