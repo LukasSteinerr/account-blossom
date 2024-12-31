@@ -29,7 +29,7 @@ export function CodeListings() {
           games (
             title
           ),
-          profiles!game_codes_seller_id_fkey (
+          seller:seller_id (
             stripe_account_id
           )
         `)
@@ -61,7 +61,7 @@ export function CodeListings() {
 
       // Check if the seller has Stripe setup
       const listing = listings?.find(l => l.id === gameCodeId);
-      if (!listing?.profiles?.stripe_account_id) {
+      if (!listing?.seller?.stripe_account_id) {
         toast({
           title: "Purchase Unavailable",
           description: "This seller hasn't completed their payment setup yet. Please try another listing.",
