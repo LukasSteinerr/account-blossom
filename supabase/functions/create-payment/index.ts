@@ -16,9 +16,10 @@ serve(async (req) => {
     const { gameCodeId } = await req.json()
     console.log('Creating payment for game code:', gameCodeId)
 
+    // Initialize Supabase client with service role key to bypass RLS
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
     // Get the authenticated user
@@ -33,7 +34,7 @@ serve(async (req) => {
 
     console.log('Authenticated user:', user.id)
 
-    // Get game code details with seller profile - using maybeSingle() for better error handling
+    // Get game code details with seller profile using service role
     const { data: gameCode, error: gameCodeError } = await supabaseClient
       .from('game_codes')
       .select(`
@@ -65,11 +66,16 @@ serve(async (req) => {
     console.log('Found game code:', gameCode.id)
 
     // Double-check the game code hasn't been purchased while we were processing
-    const { count } = await supabaseClient
+    const { count, error: countError } = await supabaseClient
       .from('payments')
       .select('*', { count: 'exact', head: true })
       .eq('game_code_id', gameCodeId)
       .eq('payment_status', 'succeeded')
+
+    if (countError) {
+      console.error('Error checking payment status:', countError)
+      throw new Error('Failed to verify payment status')
+    }
 
     if (count && count > 0) {
       console.error('Game code already purchased')
