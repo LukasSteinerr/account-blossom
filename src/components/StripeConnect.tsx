@@ -19,7 +19,18 @@ import { useState } from "react";
 const formSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  dateOfBirth: z.string().min(1, "Date of birth is required"),
+  dateOfBirth: z.string().refine((date) => {
+    const birthDate = new Date(date);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age >= 13;
+  }, "You must be at least 13 years old to use this service"),
   bankAccount: z.object({
     accountNumber: z.string().min(1, "Account number is required"),
     routingNumber: z.string().min(9, "Routing number must be 9 digits").max(9),
@@ -137,7 +148,7 @@ export function StripeConnect({ onComplete }: StripeConnectProps) {
             <FormItem>
               <FormLabel>Date of Birth</FormLabel>
               <FormControl>
-                <Input type="date" {...field} />
+                <Input type="date" {...field} max={new Date().toISOString().split('T')[0]} />
               </FormControl>
               <FormMessage />
             </FormItem>
