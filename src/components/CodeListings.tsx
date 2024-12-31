@@ -6,11 +6,15 @@ import { Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { loadStripe } from "@stripe/stripe-js";
 import { GameCodeCard } from "./GameCodeCard";
+import { Elements } from "@stripe/stripe-js";
+import { PaymentForm } from "./PaymentForm";
 
-const stripePromise = loadStripe('pk_test_51QCOobGgo79eNf4FUob1l4oJFWOC71UYyZCtmQp4UbH5lzPi2W8xewfBIRNfMRJHaINGMQrMjKgGDi4cm2hP8f4X000aXjneTM');
+const stripePromise = loadStripe(process.env.STRIPE_PUBLISHABLE_KEY || 'pk_test_51QCOobGgo79eNf4FUob1l4oJFWOC71UYyZCtmQp4UbH5lzPi2W8xewfBIRNfMRJHaINGMQrMjKgGDi4cm2hP8f4X000aXjneTM');
 
 export function CodeListings() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedGameCode, setSelectedGameCode] = useState(null);
+  const [clientSecret, setClientSecret] = useState("");
   const { toast } = useToast();
 
   const { data: listings, isLoading } = useQuery({
@@ -55,17 +59,8 @@ export function CodeListings() {
 
       if (error) throw error;
 
-      const { clientSecret } = data;
-      const stripe = await stripePromise;
-      if (!stripe) throw new Error('Stripe not loaded');
-
-      const { error: stripeError } = await stripe.confirmCardPayment(clientSecret);
-      if (stripeError) throw stripeError;
-
-      toast({
-        title: "Success",
-        description: "Payment successful! The code will be revealed shortly.",
-      });
+      setSelectedGameCode(gameCodeId);
+      setClientSecret(data.clientSecret);
     } catch (error) {
       toast({
         title: "Error",
@@ -102,6 +97,17 @@ export function CodeListings() {
           ))
         )}
       </div>
+
+      {clientSecret && (
+        <Elements stripe={stripePromise} options={{ clientSecret }}>
+          <PaymentForm 
+            onSuccess={() => {
+              setClientSecret("");
+              setSelectedGameCode(null);
+            }}
+          />
+        </Elements>
+      )}
     </div>
   );
 }

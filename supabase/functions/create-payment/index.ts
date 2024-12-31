@@ -2,12 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0'
 
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
-  apiVersion: '2023-10-16',
-})
-
-const PLATFORM_FEE_PERCENTAGE = 0.05 // 5% platform fee
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -26,6 +20,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     )
 
+    // Get the authenticated user
     const authHeader = req.headers.get('Authorization')!
     const token = authHeader.replace('Bearer ', '')
     const { data: { user } } = await supabaseClient.auth.getUser(token)
@@ -49,11 +44,17 @@ serve(async (req) => {
     if (gameCode.payment_status !== 'unpaid') throw new Error('Game code already purchased')
     if (!gameCode.profiles?.stripe_account_id) throw new Error('Seller not setup for payments')
 
-    const platformFee = Math.round(gameCode.price * PLATFORM_FEE_PERCENTAGE * 100)
-    const sellerAmount = Math.round(gameCode.price * 100) - platformFee
+    const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+      apiVersion: '2023-10-16',
+    })
 
+    // Calculate platform fee (5%)
+    const platformFee = Math.round(gameCode.price * 0.05 * 100)
+    const amount = Math.round(gameCode.price * 100)
+
+    // Create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(gameCode.price * 100),
+      amount,
       currency: 'usd',
       application_fee_amount: platformFee,
       transfer_data: {
