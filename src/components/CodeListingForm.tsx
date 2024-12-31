@@ -16,6 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { StripeConnect } from "./StripeConnect";
 
 const formSchema = z.object({
   code: z.string().min(1, "Code is required"),
@@ -29,6 +31,8 @@ const formSchema = z.object({
 
 export function CodeListingForm() {
   const { toast } = useToast();
+  const [showStripeConnect, setShowStripeConnect] = useState(false);
+  const [draftListing, setDraftListing] = useState<any>(null);
 
   const { data: games, isLoading: gamesLoading } = useQuery({
     queryKey: ["games"],
@@ -67,7 +71,14 @@ export function CodeListingForm() {
         return;
       }
 
-      const { error } = await supabase.from("game_codes").insert({
+      // First check if the user has a Stripe account
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('stripe_account_id')
+        .eq('id', user.id)
+        .single();
+
+      const listing = {
         code_text: values.code,
         price: parseFloat(values.price),
         game_id: values.gameId,
@@ -76,16 +87,27 @@ export function CodeListingForm() {
         expiration_date: values.expirationDate ? new Date(values.expirationDate).toISOString() : null,
         region: values.region || null,
         additional_info: values.additionalInfo || null,
-      });
+        status: profile?.stripe_account_id ? 'available' : 'pending_payment_setup',
+      };
+
+      const { error } = await supabase.from("game_codes").insert(listing);
 
       if (error) throw error;
 
-      toast({
-        title: "Success",
-        description: "Your code has been listed",
-      });
-
-      form.reset();
+      if (!profile?.stripe_account_id) {
+        setDraftListing(listing);
+        setShowStripeConnect(true);
+        toast({
+          title: "Almost there!",
+          description: "Please set up your payment account to complete your listing.",
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "Your code has been listed",
+        });
+        form.reset();
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -95,7 +117,20 @@ export function CodeListingForm() {
     }
   }
 
+  const handleStripeConnectComplete = () => {
+    setShowStripeConnect(false);
+    toast({
+      title: "Success",
+      description: "Your payment account has been set up and your listing is now public!",
+    });
+    form.reset();
+  };
+
   if (gamesLoading) return <div>Loading...</div>;
+
+  if (showStripeConnect) {
+    return <StripeConnect onComplete={handleStripeConnectComplete} />;
+  }
 
   return (
     <Form {...form}>

@@ -26,7 +26,11 @@ const formSchema = z.object({
   }),
 });
 
-export function StripeConnect() {
+interface StripeConnectProps {
+  onComplete?: () => void;
+}
+
+export function StripeConnect({ onComplete }: StripeConnectProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -66,13 +70,22 @@ export function StripeConnect() {
 
       if (updateError) throw updateError;
 
+      // Update any pending listings to available
+      const { error: updateListingsError } = await supabase
+        .from('game_codes')
+        .update({ status: 'available' })
+        .eq('status', 'pending_payment_setup');
+
+      if (updateListingsError) throw updateListingsError;
+
       toast({
         title: "Success",
         description: "Your account has been set up for receiving payments",
       });
 
-      // Refresh the page to show the listing form
-      window.location.reload();
+      if (onComplete) {
+        onComplete();
+      }
     } catch (error: any) {
       toast({
         title: "Error",
