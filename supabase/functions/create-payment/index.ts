@@ -17,6 +17,11 @@ serve(async (req) => {
     const { gameCodeId } = await req.json()
     console.log('Creating payment for game code:', gameCodeId)
 
+    if (!gameCodeId) {
+      console.error('No game code ID provided')
+      throw new Error('Game code ID is required')
+    }
+
     // Initialize Stripe
     const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
@@ -40,22 +45,22 @@ serve(async (req) => {
 
     console.log('Authenticated user:', user.id)
 
-    // Get game code details with seller profile
+    // First, get the seller's profile to check for Stripe account
     const { data: gameCode, error: gameCodeError } = await supabaseAdmin
       .from('game_codes')
       .select(`
         *,
-        seller:profiles!game_codes_seller_id_fkey (
-          stripe_account_id
-        ),
         games (
           title
+        ),
+        seller:profiles!inner (
+          stripe_account_id
         )
       `)
       .eq('id', gameCodeId)
       .eq('status', 'available')
       .eq('payment_status', 'unpaid')
-      .maybeSingle()
+      .single()
 
     if (gameCodeError) {
       console.error('Error fetching game code:', gameCodeError)
