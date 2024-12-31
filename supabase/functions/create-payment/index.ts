@@ -53,7 +53,7 @@ serve(async (req) => {
         games (
           title
         ),
-        seller:profiles!seller_id(
+        seller:profiles!seller_id (
           stripe_account_id
         )
       `)

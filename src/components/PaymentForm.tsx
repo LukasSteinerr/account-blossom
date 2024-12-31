@@ -16,19 +16,33 @@ export function PaymentForm({ onSuccess, clientSecret }: PaymentFormProps) {
   useEffect(() => {
     if (!stripe || !clientSecret) return;
 
-    // Redirect to Stripe Checkout
-    stripe.redirectToCheckout({
-      sessionId: clientSecret
-    }).then((result) => {
-      if (result.error) {
+    const redirectToCheckout = async () => {
+      try {
+        const { error } = await stripe.redirectToCheckout({
+          sessionId: clientSecret
+        });
+        
+        if (error) {
+          console.error('Stripe redirect error:', error);
+          toast({
+            title: "Payment failed",
+            description: error.message,
+            variant: "destructive",
+          });
+          onSuccess(); // Close the dialog
+        }
+      } catch (e) {
+        console.error('Stripe redirect error:', e);
         toast({
           title: "Payment failed",
-          description: result.error.message,
+          description: "Failed to redirect to payment page",
           variant: "destructive",
         });
         onSuccess(); // Close the dialog
       }
-    });
+    };
+
+    redirectToCheckout();
   }, [stripe, clientSecret, toast, onSuccess]);
 
   return (
