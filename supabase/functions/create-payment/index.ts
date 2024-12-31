@@ -53,14 +53,14 @@ serve(async (req) => {
         games (
           title
         ),
-        seller:profiles!inner (
+        seller:seller_id (
           stripe_account_id
         )
       `)
       .eq('id', gameCodeId)
       .eq('status', 'available')
       .eq('payment_status', 'unpaid')
-      .single()
+      .maybeSingle()
 
     if (gameCodeError) {
       console.error('Error fetching game code:', gameCodeError)
