@@ -69,6 +69,7 @@ export function CodeListingForm() {
         region: values.region || null,
         additional_info: values.additionalInfo || null,
         status: profile?.stripe_account_id ? 'available' : 'pending_payment_setup',
+        payment_status: 'unpaid',
       };
 
       const { error } = await supabase.from("game_codes").insert(listing);
@@ -92,7 +93,7 @@ export function CodeListingForm() {
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to list your code",
+        description: error.message || "Failed to list your code",
         variant: "destructive",
       });
     }
