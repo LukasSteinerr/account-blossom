@@ -27,7 +27,7 @@ serve(async (req) => {
       apiVersion: '2023-10-16',
     })
 
-    // Initialize Supabase client with service role key to bypass RLS
+    // Initialize Supabase client with service role key to bypass RLS policies
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -45,7 +45,7 @@ serve(async (req) => {
 
     console.log('Authenticated user:', user.id)
 
-    // First, get the seller's profile to check for Stripe account
+    // Fetch the game code with seller's Stripe account info
     const { data: gameCode, error: gameCodeError } = await supabaseAdmin
       .from('game_codes')
       .select(`
@@ -53,7 +53,7 @@ serve(async (req) => {
         games (
           title
         ),
-        seller:seller_id (
+        seller:profiles!seller_id(
           stripe_account_id
         )
       `)
@@ -73,7 +73,7 @@ serve(async (req) => {
     }
 
     if (!gameCode.seller?.stripe_account_id) {
-      console.error('Seller not setup for payments')
+      console.error('Seller not setup for payments:', gameCode)
       throw new Error('Seller not setup for payments')
     }
 
