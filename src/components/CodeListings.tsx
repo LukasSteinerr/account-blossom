@@ -98,7 +98,7 @@ export function CodeListings() {
       }
 
       setSelectedGameCode(gameCodeId);
-      setClientSecret(data.clientSecret);
+      setClientSecret(data.sessionId);
     } catch (error) {
       console.error('Error in handleBuyClick:', error);
       toast({
@@ -139,8 +139,9 @@ export function CodeListings() {
       </div>
 
       {clientSecret && (
-        <Elements stripe={stripePromise} options={{ clientSecret }}>
+        <Elements stripe={stripePromise}>
           <PaymentForm 
+            clientSecret={clientSecret}
             onSuccess={() => {
               setClientSecret("");
               setSelectedGameCode(null);

@@ -1,67 +1,43 @@
-import { useState } from "react";
-import {
-  PaymentElement,
-  useStripe,
-  useElements
-} from "@stripe/react-stripe-js";
-import { Button } from "./ui/button";
+import { useEffect } from "react";
+import { useStripe } from "@stripe/react-stripe-js";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent } from "./ui/dialog";
+import { Loader2 } from "lucide-react";
 
 interface PaymentFormProps {
   onSuccess: () => void;
+  clientSecret: string;
 }
 
-export function PaymentForm({ onSuccess }: PaymentFormProps) {
+export function PaymentForm({ onSuccess, clientSecret }: PaymentFormProps) {
   const stripe = useStripe();
-  const elements = useElements();
-  const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    if (!stripe || !clientSecret) return;
 
-    if (!stripe || !elements) {
-      return;
-    }
-
-    setIsProcessing(true);
-
-    const { error, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      redirect: "if_required"
+    // Redirect to Stripe Checkout
+    stripe.redirectToCheckout({
+      sessionId: clientSecret
+    }).then((result) => {
+      if (result.error) {
+        toast({
+          title: "Payment failed",
+          description: result.error.message,
+          variant: "destructive",
+        });
+        onSuccess(); // Close the dialog
+      }
     });
-
-    if (error) {
-      toast({
-        title: "Payment failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else if (paymentIntent.status === "succeeded") {
-      toast({
-        title: "Payment successful",
-        description: "Your game code will be revealed shortly",
-      });
-      onSuccess();
-    }
-
-    setIsProcessing(false);
-  };
+  }, [stripe, clientSecret, toast, onSuccess]);
 
   return (
-    <Dialog open={true} onOpenChange={() => !isProcessing && onSuccess()}>
+    <Dialog open={true} onOpenChange={() => onSuccess()}>
       <DialogContent className="sm:max-w-[425px]">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <PaymentElement />
-          <Button 
-            type="submit" 
-            disabled={isProcessing || !stripe || !elements}
-            className="w-full"
-          >
-            {isProcessing ? "Processing..." : "Pay now"}
-          </Button>
-        </form>
+        <div className="flex items-center justify-center p-6">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span className="ml-2">Redirecting to payment...</span>
+        </div>
       </DialogContent>
     </Dialog>
   );

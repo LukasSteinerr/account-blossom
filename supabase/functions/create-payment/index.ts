@@ -41,6 +41,9 @@ serve(async (req) => {
         *,
         seller:seller_id (
           stripe_account_id
+        ),
+        games (
+          title
         )
       `)
       .eq('id', gameCodeId)
@@ -90,24 +93,41 @@ serve(async (req) => {
     const platformFee = Math.round(gameCode.price * 0.05 * 100)
     const amount = Math.round(gameCode.price * 100)
 
-    console.log('Creating payment intent with amount:', amount, 'and platform fee:', platformFee)
+    console.log('Creating checkout session with amount:', amount, 'and platform fee:', platformFee)
 
-    // Create payment intent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount,
-      currency: 'usd',
-      application_fee_amount: platformFee,
-      transfer_data: {
-        destination: gameCode.seller.stripe_account_id,
-      },
-      metadata: {
-        gameCodeId,
-        buyerId: user.id,
-        sellerId: gameCode.seller_id,
+    // Create Stripe Checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: gameCode.games.title,
+              description: `Game code for ${gameCode.games.title}`,
+            },
+            unit_amount: amount,
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${req.headers.get('origin')}/dashboard?success=true`,
+      cancel_url: `${req.headers.get('origin')}/dashboard?canceled=true`,
+      payment_intent_data: {
+        application_fee_amount: platformFee,
+        transfer_data: {
+          destination: gameCode.seller.stripe_account_id,
+        },
+        metadata: {
+          gameCodeId,
+          buyerId: user.id,
+          sellerId: gameCode.seller_id,
+        },
       },
     })
 
-    console.log('Created payment intent:', paymentIntent.id)
+    console.log('Created checkout session:', session.id)
 
     // Create payment record
     const { error: paymentError } = await supabaseClient.from('payments').insert({
@@ -115,7 +135,7 @@ serve(async (req) => {
       buyer_id: user.id,
       amount: gameCode.price,
       platform_fee: platformFee / 100,
-      payment_intent_id: paymentIntent.id,
+      payment_intent_id: session.payment_intent as string,
     })
 
     if (paymentError) {
@@ -127,7 +147,7 @@ serve(async (req) => {
     const { error: updateError } = await supabaseClient
       .from('game_codes')
       .update({ 
-        stripe_payment_intent_id: paymentIntent.id,
+        stripe_payment_intent_id: session.payment_intent as string,
         status: 'pending'
       })
       .eq('id', gameCodeId)
@@ -140,7 +160,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ clientSecret: paymentIntent.client_secret }),
+      JSON.stringify({ sessionId: session.id }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
