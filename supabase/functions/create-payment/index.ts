@@ -8,16 +8,22 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
     const { gameCodeId } = await req.json()
     console.log('Creating payment for game code:', gameCodeId)
 
+    // Initialize Stripe
+    const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+      apiVersion: '2023-10-16',
+    })
+
     // Initialize Supabase client with service role key to bypass RLS
-    const supabaseClient = createClient(
+    const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
@@ -25,7 +31,7 @@ serve(async (req) => {
     // Get the authenticated user
     const authHeader = req.headers.get('Authorization')!
     const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token)
 
     if (userError || !user) {
       console.error('Authentication error:', userError)
@@ -34,12 +40,12 @@ serve(async (req) => {
 
     console.log('Authenticated user:', user.id)
 
-    // Get game code details with seller profile using service role
-    const { data: gameCode, error: gameCodeError } = await supabaseClient
+    // Get game code details with seller profile
+    const { data: gameCode, error: gameCodeError } = await supabaseAdmin
       .from('game_codes')
       .select(`
         *,
-        seller:seller_id (
+        seller:profiles!game_codes_seller_id_fkey (
           stripe_account_id
         ),
         games (
@@ -69,7 +75,7 @@ serve(async (req) => {
     console.log('Found game code:', gameCode.id)
 
     // Double-check the game code hasn't been purchased while we were processing
-    const { count, error: countError } = await supabaseClient
+    const { count, error: countError } = await supabaseAdmin
       .from('payments')
       .select('*', { count: 'exact', head: true })
       .eq('game_code_id', gameCodeId)
@@ -84,10 +90,6 @@ serve(async (req) => {
       console.error('Game code already purchased')
       throw new Error('Game code already purchased')
     }
-
-    const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
-      apiVersion: '2023-10-16',
-    })
 
     // Calculate platform fee (5%)
     const platformFee = Math.round(gameCode.price * 0.05 * 100)
@@ -130,13 +132,15 @@ serve(async (req) => {
     console.log('Created checkout session:', session.id)
 
     // Create payment record
-    const { error: paymentError } = await supabaseClient.from('payments').insert({
-      game_code_id: gameCodeId,
-      buyer_id: user.id,
-      amount: gameCode.price,
-      platform_fee: platformFee / 100,
-      payment_intent_id: session.payment_intent as string,
-    })
+    const { error: paymentError } = await supabaseAdmin
+      .from('payments')
+      .insert({
+        game_code_id: gameCodeId,
+        buyer_id: user.id,
+        amount: gameCode.price,
+        platform_fee: platformFee / 100,
+        payment_intent_id: session.payment_intent as string,
+      })
 
     if (paymentError) {
       console.error('Error creating payment record:', paymentError)
@@ -144,7 +148,7 @@ serve(async (req) => {
     }
 
     // Update game code status
-    const { error: updateError } = await supabaseClient
+    const { error: updateError } = await supabaseAdmin
       .from('game_codes')
       .update({ 
         stripe_payment_intent_id: session.payment_intent as string,
