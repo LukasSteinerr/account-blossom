@@ -8,6 +8,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { GameCodeCard } from "./GameCodeCard";
 import { Elements } from "@stripe/react-stripe-js";
 import { PaymentForm } from "./PaymentForm";
+import { useNavigate } from "react-router-dom";
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
@@ -16,6 +17,7 @@ export function CodeListings() {
   const [selectedGameCode, setSelectedGameCode] = useState(null);
   const [clientSecret, setClientSecret] = useState("");
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const { data: listings, isLoading, refetch } = useQuery({
     queryKey: ["game-codes", searchTerm],
@@ -26,6 +28,9 @@ export function CodeListings() {
           *,
           games (
             title
+          ),
+          seller:seller_id (
+            stripe_account_id
           )
         `)
         .eq("status", "available")
@@ -48,6 +53,18 @@ export function CodeListings() {
         toast({
           title: "Authentication Required",
           description: "Please log in to make a purchase",
+          variant: "destructive",
+        });
+        navigate("/auth");
+        return;
+      }
+
+      // Check if the seller has Stripe setup
+      const listing = listings?.find(l => l.id === gameCodeId);
+      if (!listing?.seller?.stripe_account_id) {
+        toast({
+          title: "Purchase Unavailable",
+          description: "This seller hasn't completed their payment setup yet. Please try another listing.",
           variant: "destructive",
         });
         return;
@@ -78,7 +95,7 @@ export function CodeListings() {
           description: "This game code is no longer available for purchase",
           variant: "destructive",
         });
-        refetch(); // Refresh the listings
+        refetch();
         return;
       }
 
@@ -88,17 +105,28 @@ export function CodeListings() {
 
       if (error) {
         console.error('Payment creation error:', error);
+        
+        // Handle specific error cases
+        if (error.message.includes("Invalid Refresh Token")) {
+          toast({
+            title: "Session Expired",
+            description: "Your session has expired. Please log in again.",
+            variant: "destructive",
+          });
+          navigate("/auth");
+          return;
+        }
+
         toast({
           title: "Payment Error",
           description: error.message || "Failed to create payment",
           variant: "destructive",
         });
-        refetch(); // Refresh the listings
+        refetch();
         return;
       }
 
-      setSelectedGameCode(gameCodeId);
-      setClientSecret(data.sessionId);
+      window.location.href = data.url;
     } catch (error) {
       console.error('Error in handleBuyClick:', error);
       toast({
@@ -106,7 +134,7 @@ export function CodeListings() {
         description: "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
-      refetch(); // Refresh the listings
+      refetch();
     }
   };
 
@@ -145,7 +173,7 @@ export function CodeListings() {
             onSuccess={() => {
               setClientSecret("");
               setSelectedGameCode(null);
-              refetch(); // Refresh the listings after successful payment
+              refetch();
             }}
           />
         </Elements>
