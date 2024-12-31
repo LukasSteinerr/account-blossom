@@ -53,7 +53,7 @@ serve(async (req) => {
         games (
           title
         ),
-        seller:profiles!seller_id (
+        seller:seller_id (
           stripe_account_id
         )
       `)
@@ -72,12 +72,12 @@ serve(async (req) => {
       throw new Error('Game code not found or already purchased')
     }
 
+    console.log('Found game code:', gameCode)
+
     if (!gameCode.seller?.stripe_account_id) {
-      console.error('Seller not setup for payments:', gameCode)
+      console.error('Seller not setup for payments')
       throw new Error('Seller not setup for payments')
     }
-
-    console.log('Found game code:', gameCode.id)
 
     // Double-check the game code hasn't been purchased while we were processing
     const { count, error: countError } = await supabaseAdmin
