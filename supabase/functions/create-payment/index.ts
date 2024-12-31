@@ -33,7 +33,7 @@ serve(async (req) => {
 
     console.log('Authenticated user:', user.id)
 
-    // Get game code details with seller profile
+    // Get game code details with seller profile - using maybeSingle() for better error handling
     const { data: gameCode, error: gameCodeError } = await supabaseClient
       .from('game_codes')
       .select(`
@@ -45,16 +45,16 @@ serve(async (req) => {
       .eq('id', gameCodeId)
       .eq('status', 'available')
       .eq('payment_status', 'unpaid')
-      .single()
+      .maybeSingle()
 
     if (gameCodeError) {
       console.error('Error fetching game code:', gameCodeError)
-      throw new Error('Game code not found')
+      throw new Error('Failed to fetch game code')
     }
 
     if (!gameCode) {
       console.error('Game code not found or not available')
-      throw new Error('Game code not found or not available')
+      throw new Error('Game code not found or already purchased')
     }
 
     if (!gameCode.seller?.stripe_account_id) {
@@ -63,6 +63,18 @@ serve(async (req) => {
     }
 
     console.log('Found game code:', gameCode.id)
+
+    // Double-check the game code hasn't been purchased while we were processing
+    const { count } = await supabaseClient
+      .from('payments')
+      .select('*', { count: 'exact', head: true })
+      .eq('game_code_id', gameCodeId)
+      .eq('payment_status', 'succeeded')
+
+    if (count && count > 0) {
+      console.error('Game code already purchased')
+      throw new Error('Game code already purchased')
+    }
 
     const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
@@ -113,6 +125,8 @@ serve(async (req) => {
         status: 'pending'
       })
       .eq('id', gameCodeId)
+      .eq('status', 'available')
+      .eq('payment_status', 'unpaid')
 
     if (updateError) {
       console.error('Error updating game code:', updateError)

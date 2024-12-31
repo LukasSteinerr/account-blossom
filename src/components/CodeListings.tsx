@@ -17,7 +17,7 @@ export function CodeListings() {
   const [clientSecret, setClientSecret] = useState("");
   const { toast } = useToast();
 
-  const { data: listings, isLoading } = useQuery({
+  const { data: listings, isLoading, refetch } = useQuery({
     queryKey: ["game-codes", searchTerm],
     queryFn: async () => {
       let query = supabase
@@ -46,7 +46,7 @@ export function CodeListings() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         toast({
-          title: "Error",
+          title: "Authentication Required",
           description: "Please log in to make a purchase",
           variant: "destructive",
         });
@@ -54,20 +54,31 @@ export function CodeListings() {
       }
 
       // Verify the game code is still available
-      const { data: gameCode } = await supabase
+      const { data: gameCode, error: verificationError } = await supabase
         .from("game_codes")
         .select("*")
         .eq("id", gameCodeId)
         .eq("status", "available")
         .eq("payment_status", "unpaid")
-        .single();
+        .maybeSingle();
+
+      if (verificationError) {
+        console.error('Verification error:', verificationError);
+        toast({
+          title: "Error",
+          description: "Failed to verify game code availability",
+          variant: "destructive",
+        });
+        return;
+      }
 
       if (!gameCode) {
         toast({
-          title: "Error",
-          description: "This game code is no longer available",
+          title: "Game Code Unavailable",
+          description: "This game code is no longer available for purchase",
           variant: "destructive",
         });
+        refetch(); // Refresh the listings
         return;
       }
 
@@ -78,10 +89,11 @@ export function CodeListings() {
       if (error) {
         console.error('Payment creation error:', error);
         toast({
-          title: "Error",
+          title: "Payment Error",
           description: error.message || "Failed to create payment",
           variant: "destructive",
         });
+        refetch(); // Refresh the listings
         return;
       }
 
@@ -91,9 +103,10 @@ export function CodeListings() {
       console.error('Error in handleBuyClick:', error);
       toast({
         title: "Error",
-        description: error.message || "An unexpected error occurred",
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
+      refetch(); // Refresh the listings
     }
   };
 
@@ -131,6 +144,7 @@ export function CodeListings() {
             onSuccess={() => {
               setClientSecret("");
               setSelectedGameCode(null);
+              refetch(); // Refresh the listings after successful payment
             }}
           />
         </Elements>
