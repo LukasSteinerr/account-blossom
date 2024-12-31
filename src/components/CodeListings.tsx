@@ -9,7 +9,7 @@ import { GameCodeCard } from "./GameCodeCard";
 import { Elements } from "@stripe/react-stripe-js";
 import { PaymentForm } from "./PaymentForm";
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_51QCOobGgo79eNf4FUob1l4oJFWOC71UYyZCtmQp4UbH5lzPi2W8xewfBIRNfMRJHaINGMQrMjKgGDi4cm2hP8f4X000aXjneTM');
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 export function CodeListings() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -53,18 +53,45 @@ export function CodeListings() {
         return;
       }
 
+      // Verify the game code is still available
+      const { data: gameCode } = await supabase
+        .from("game_codes")
+        .select("*")
+        .eq("id", gameCodeId)
+        .eq("status", "available")
+        .eq("payment_status", "unpaid")
+        .single();
+
+      if (!gameCode) {
+        toast({
+          title: "Error",
+          description: "This game code is no longer available",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('create-payment', {
         body: { gameCodeId },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Payment creation error:', error);
+        toast({
+          title: "Error",
+          description: error.message || "Failed to create payment",
+          variant: "destructive",
+        });
+        return;
+      }
 
       setSelectedGameCode(gameCodeId);
       setClientSecret(data.clientSecret);
     } catch (error) {
+      console.error('Error in handleBuyClick:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "An unexpected error occurred",
         variant: "destructive",
       });
     }

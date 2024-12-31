@@ -14,6 +14,7 @@ serve(async (req) => {
 
   try {
     const { gameCodeId } = await req.json()
+    console.log('Creating payment for game code:', gameCodeId)
 
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -23,26 +24,45 @@ serve(async (req) => {
     // Get the authenticated user
     const authHeader = req.headers.get('Authorization')!
     const token = authHeader.replace('Bearer ', '')
-    const { data: { user } } = await supabaseClient.auth.getUser(token)
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
 
-    if (!user) throw new Error('Not authenticated')
+    if (userError || !user) {
+      console.error('Authentication error:', userError)
+      throw new Error('Not authenticated')
+    }
 
-    // Get game code details
-    const { data: gameCode } = await supabaseClient
+    console.log('Authenticated user:', user.id)
+
+    // Get game code details with seller profile
+    const { data: gameCode, error: gameCodeError } = await supabaseClient
       .from('game_codes')
       .select(`
         *,
-        profiles:seller_id (
+        seller:seller_id (
           stripe_account_id
         )
       `)
       .eq('id', gameCodeId)
+      .eq('status', 'available')
+      .eq('payment_status', 'unpaid')
       .single()
 
-    if (!gameCode) throw new Error('Game code not found')
-    if (gameCode.status !== 'available') throw new Error('Game code not available')
-    if (gameCode.payment_status !== 'unpaid') throw new Error('Game code already purchased')
-    if (!gameCode.profiles?.stripe_account_id) throw new Error('Seller not setup for payments')
+    if (gameCodeError) {
+      console.error('Error fetching game code:', gameCodeError)
+      throw new Error('Game code not found')
+    }
+
+    if (!gameCode) {
+      console.error('Game code not found or not available')
+      throw new Error('Game code not found or not available')
+    }
+
+    if (!gameCode.seller?.stripe_account_id) {
+      console.error('Seller not setup for payments')
+      throw new Error('Seller not setup for payments')
+    }
+
+    console.log('Found game code:', gameCode.id)
 
     const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
@@ -52,13 +72,15 @@ serve(async (req) => {
     const platformFee = Math.round(gameCode.price * 0.05 * 100)
     const amount = Math.round(gameCode.price * 100)
 
+    console.log('Creating payment intent with amount:', amount, 'and platform fee:', platformFee)
+
     // Create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: 'usd',
       application_fee_amount: platformFee,
       transfer_data: {
-        destination: gameCode.profiles.stripe_account_id,
+        destination: gameCode.seller.stripe_account_id,
       },
       metadata: {
         gameCodeId,
@@ -67,8 +89,10 @@ serve(async (req) => {
       },
     })
 
+    console.log('Created payment intent:', paymentIntent.id)
+
     // Create payment record
-    await supabaseClient.from('payments').insert({
+    const { error: paymentError } = await supabaseClient.from('payments').insert({
       game_code_id: gameCodeId,
       buyer_id: user.id,
       amount: gameCode.price,
@@ -76,11 +100,31 @@ serve(async (req) => {
       payment_intent_id: paymentIntent.id,
     })
 
+    if (paymentError) {
+      console.error('Error creating payment record:', paymentError)
+      throw new Error('Failed to create payment record')
+    }
+
+    // Update game code status
+    const { error: updateError } = await supabaseClient
+      .from('game_codes')
+      .update({ 
+        stripe_payment_intent_id: paymentIntent.id,
+        status: 'pending'
+      })
+      .eq('id', gameCodeId)
+
+    if (updateError) {
+      console.error('Error updating game code:', updateError)
+      throw new Error('Failed to update game code status')
+    }
+
     return new Response(
       JSON.stringify({ clientSecret: paymentIntent.client_secret }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
+    console.error('Error in create-payment function:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
