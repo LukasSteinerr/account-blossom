@@ -59,7 +59,12 @@ export function CodeListings() {
       // Verify the game code is still available
       const { data: gameCode, error: verificationError } = await supabase
         .from("game_codes")
-        .select("*")
+        .select(`
+          *,
+          seller:seller_id (
+            stripe_account_id
+          )
+        `)
         .eq("id", gameCodeId)
         .eq("status", "available")
         .eq("payment_status", "unpaid")
@@ -79,6 +84,17 @@ export function CodeListings() {
         toast({
           title: "Game Code Unavailable",
           description: "This game code is no longer available for purchase",
+          variant: "destructive",
+        });
+        refetch(); // Refresh the listings
+        return;
+      }
+
+      // Check if seller has Stripe setup
+      if (!gameCode.seller?.stripe_account_id) {
+        toast({
+          title: "Purchase Not Available",
+          description: "The seller hasn't completed their payment setup yet. Please try another listing.",
           variant: "destructive",
         });
         refetch(); // Refresh the listings
