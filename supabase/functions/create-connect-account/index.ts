@@ -45,10 +45,15 @@ serve(async (req) => {
     let accountId = profile?.stripe_account_id
 
     if (!accountId) {
-      // Create new Connect account
+      // Create new Connect account with required capabilities
       const account = await stripe.accounts.create({
         type: 'express',
         email: user.email,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_type: 'individual',
       })
       accountId = account.id
 
