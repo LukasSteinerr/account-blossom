@@ -13,12 +13,29 @@ import * as z from "zod";
 export function CodeListingForm() {
   const { toast } = useToast();
   const [showStripeConnect, setShowStripeConnect] = useState(false);
-  const [draftListing, setDraftListing] = useState<any>(null);
 
   const { data: games, isLoading: gamesLoading } = useQuery({
     queryKey: ["games"],
     queryFn: async () => {
       const { data, error } = await supabase.from("games").select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Query to check if user has Stripe setup
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('stripe_account_id')
+        .eq('id', user.id)
+        .single();
+        
       if (error) throw error;
       return data;
     },
@@ -52,12 +69,15 @@ export function CodeListingForm() {
         return;
       }
 
-      // First check if the user has a Stripe account
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('stripe_account_id')
-        .eq('id', user.id)
-        .single();
+      // Check if user has Stripe setup
+      if (!profile?.stripe_account_id) {
+        setShowStripeConnect(true);
+        toast({
+          title: "Stripe Setup Required",
+          description: "Please set up your payment account before listing codes.",
+        });
+        return;
+      }
 
       const listing = {
         code_text: values.code,
@@ -68,7 +88,7 @@ export function CodeListingForm() {
         expiration_date: values.expirationDate ? new Date(values.expirationDate).toISOString() : null,
         region: values.region || null,
         additional_info: values.additionalInfo || null,
-        status: profile?.stripe_account_id ? 'available' : 'pending_payment_setup',
+        status: 'available',
         payment_status: 'unpaid',
       };
 
@@ -76,20 +96,11 @@ export function CodeListingForm() {
 
       if (error) throw error;
 
-      if (!profile?.stripe_account_id) {
-        setDraftListing(listing);
-        setShowStripeConnect(true);
-        toast({
-          title: "Almost there!",
-          description: "Please set up your payment account to complete your listing.",
-        });
-      } else {
-        toast({
-          title: "Success",
-          description: "Your code has been listed",
-        });
-        form.reset();
-      }
+      toast({
+        title: "Success",
+        description: "Your code has been listed",
+      });
+      form.reset();
     } catch (error) {
       toast({
         title: "Error",
@@ -103,15 +114,29 @@ export function CodeListingForm() {
     setShowStripeConnect(false);
     toast({
       title: "Success",
-      description: "Your payment account has been set up and your listing is now public!",
+      description: "Your payment account has been set up. You can now list your codes!",
     });
-    form.reset();
   };
 
-  if (gamesLoading) return <div>Loading...</div>;
+  if (gamesLoading || profileLoading) return <div>Loading...</div>;
 
   if (showStripeConnect) {
     return <StripeConnect onComplete={handleStripeConnectComplete} />;
+  }
+
+  // If user hasn't set up Stripe yet, show the Stripe Connect form immediately
+  if (!profile?.stripe_account_id) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <h3 className="text-lg font-medium text-yellow-800">Payment Setup Required</h3>
+          <p className="text-sm text-yellow-700 mt-1">
+            Before you can list game codes, you need to set up your payment account to receive payments.
+          </p>
+        </div>
+        <StripeConnect onComplete={handleStripeConnectComplete} />
+      </div>
+    );
   }
 
   return (
