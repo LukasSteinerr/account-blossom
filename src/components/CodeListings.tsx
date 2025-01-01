@@ -27,7 +27,7 @@ export function CodeListings() {
           games (
             title
           ),
-          seller:profiles!game_codes_seller_id_fkey (
+          seller:seller_id (
             stripe_account_id
           )
         `)
