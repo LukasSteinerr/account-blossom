@@ -26,6 +26,9 @@ export function CodeListings() {
           *,
           games (
             title
+          ),
+          seller:profiles!game_codes_seller_id_fkey (
+            stripe_account_id
           )
         `)
         .eq("status", "available")
