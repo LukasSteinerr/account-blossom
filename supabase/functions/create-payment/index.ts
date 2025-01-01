@@ -8,6 +8,7 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -21,10 +22,12 @@ serve(async (req) => {
       throw new Error('Game code ID is required')
     }
 
+    // Initialize Stripe
     const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
     })
 
+    // Initialize Supabase client with service role key to bypass RLS policies
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -42,13 +45,16 @@ serve(async (req) => {
 
     console.log('Authenticated user:', user.id)
 
-    // First, fetch the game code
+    // Fetch the game code with seller's Stripe account info
     const { data: gameCode, error: gameCodeError } = await supabaseAdmin
       .from('game_codes')
       .select(`
         *,
         games (
           title
+        ),
+        seller:profiles!seller_id (
+          stripe_account_id
         )
       `)
       .eq('id', gameCodeId)
@@ -66,24 +72,12 @@ serve(async (req) => {
       throw new Error('Game code not found or already purchased')
     }
 
-    console.log('Found game code:', gameCode)
-
-    // Then, fetch the seller's profile
-    const { data: sellerProfile, error: sellerError } = await supabaseAdmin
-      .from('profiles')
-      .select('stripe_account_id')
-      .eq('id', gameCode.seller_id)
-      .single()
-
-    if (sellerError || !sellerProfile) {
-      console.error('Error fetching seller profile:', sellerError)
-      throw new Error('Failed to fetch seller information')
-    }
-
-    if (!sellerProfile.stripe_account_id) {
-      console.error('Seller not setup for payments')
+    if (!gameCode.seller?.stripe_account_id) {
+      console.error('Seller not setup for payments:', gameCode)
       throw new Error('Seller not setup for payments')
     }
+
+    console.log('Found game code:', gameCode.id)
 
     // Double-check the game code hasn't been purchased while we were processing
     const { count, error: countError } = await supabaseAdmin
@@ -130,7 +124,7 @@ serve(async (req) => {
       payment_intent_data: {
         application_fee_amount: platformFee,
         transfer_data: {
-          destination: sellerProfile.stripe_account_id,
+          destination: gameCode.seller.stripe_account_id,
         },
         metadata: {
           gameCodeId,
