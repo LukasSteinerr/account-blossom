@@ -77,6 +77,13 @@ serve(async (req) => {
       throw new Error('Seller not setup for payments')
     }
 
+    // Verify seller's account capabilities
+    const sellerAccount = await stripe.accounts.retrieve(gameCode.seller.stripe_account_id)
+    if (!sellerAccount.capabilities?.transfers || sellerAccount.capabilities.transfers !== 'active') {
+      console.error('Seller account missing transfer capability:', sellerAccount.capabilities)
+      throw new Error('Seller has not completed their payment setup. Please try another listing.')
+    }
+
     console.log('Found game code:', gameCode.id)
 
     // Double-check the game code hasn't been purchased while we were processing
