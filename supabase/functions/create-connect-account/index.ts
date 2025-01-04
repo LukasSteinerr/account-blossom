@@ -63,7 +63,6 @@ serve(async (req) => {
         transfers: { requested: true },
       },
       business_type: 'individual',
-      tos_acceptance: { service_agreement: 'recipient' }, // Simplified terms of service
       settings: {
         payouts: {
           schedule: {
