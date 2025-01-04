@@ -57,11 +57,11 @@ serve(async (req) => {
     // Get the IP address from X-Forwarded-For or Cloudflare headers
     const ip = req.headers.get('cf-connecting-ip') || 
                req.headers.get('x-forwarded-for')?.split(',')[0] || 
-               '127.0.0.1' // Fallback for development
+               '127.0.0.1'
 
     console.log('Creating account with IP:', ip)
 
-    // Create a Custom account
+    // Create a Custom account with the necessary capabilities
     const account = await stripe.accounts.create({
       type: 'custom',
       country: 'US',

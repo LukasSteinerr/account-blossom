@@ -81,14 +81,6 @@ export function StripeConnect({ onComplete }: StripeConnectProps) {
 
       if (updateError) throw updateError;
 
-      // Update any pending listings to available
-      const { error: updateListingsError } = await supabase
-        .from('game_codes')
-        .update({ status: 'available' })
-        .eq('status', 'pending_payment_setup');
-
-      if (updateListingsError) throw updateListingsError;
-
       toast({
         title: "Success",
         description: "Your account has been set up for receiving payments",
