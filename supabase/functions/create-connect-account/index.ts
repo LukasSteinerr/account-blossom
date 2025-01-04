@@ -53,7 +53,7 @@ serve(async (req) => {
       }
     }
 
-    // Create a Custom account
+    // Create a simplified Custom account for individuals
     const account = await stripe.accounts.create({
       type: 'custom',
       country: 'US',
@@ -63,9 +63,14 @@ serve(async (req) => {
         transfers: { requested: true },
       },
       business_type: 'individual',
-      business_profile: {
-        product_description: 'Selling unused game codes',
-      },
+      tos_acceptance: { service_agreement: 'recipient' }, // Simplified terms of service
+      settings: {
+        payouts: {
+          schedule: {
+            interval: 'manual' // Start with manual payouts for safety
+          }
+        }
+      }
     })
 
     console.log('Created Stripe account:', account.id)
@@ -78,12 +83,13 @@ serve(async (req) => {
 
     console.log('Updated profile with Stripe account ID')
 
-    // Create an account link for onboarding
+    // Create an account link with minimal requirements
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
       refresh_url: `${req.headers.get('origin')}/dashboard`,
       return_url: `${req.headers.get('origin')}/dashboard`,
       type: 'account_onboarding',
+      collect: 'eventually_due', // Only collect what's absolutely required
     })
 
     console.log('Created account link')
