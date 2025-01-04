@@ -12,7 +12,6 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -54,14 +53,13 @@ serve(async (req) => {
       }
     }
 
-    // Get the IP address from X-Forwarded-For or Cloudflare headers
     const ip = req.headers.get('cf-connecting-ip') || 
                req.headers.get('x-forwarded-for')?.split(',')[0] || 
                '127.0.0.1'
 
     console.log('Creating account with IP:', ip)
 
-    // Create a Custom account with the necessary capabilities
+    // Create a Custom account with identity verification requirements
     const account = await stripe.accounts.create({
       type: 'custom',
       country: 'US',
@@ -78,6 +76,19 @@ serve(async (req) => {
       business_profile: {
         product_description: 'Selling unused game codes',
       },
+      settings: {
+        payouts: {
+          schedule: {
+            interval: 'manual'
+          }
+        }
+      },
+      requirements: {
+        currently_due: [
+          'individual.verification.document',
+          'individual.verification.additional_document'
+        ]
+      }
     })
 
     console.log('Created Stripe account:', account.id)
@@ -91,7 +102,10 @@ serve(async (req) => {
     console.log('Updated profile with Stripe account ID')
 
     return new Response(
-      JSON.stringify({ accountId: account.id }),
+      JSON.stringify({ 
+        accountId: account.id,
+        verificationUrl: account.requirements?.currently_due || []
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
