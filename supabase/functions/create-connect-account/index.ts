@@ -53,13 +53,7 @@ serve(async (req) => {
       }
     }
 
-    const ip = req.headers.get('cf-connecting-ip') || 
-               req.headers.get('x-forwarded-for')?.split(',')[0] || 
-               '127.0.0.1'
-
-    console.log('Creating account with IP:', ip)
-
-    // Create a Custom account with identity verification requirements
+    // Create a Custom account
     const account = await stripe.accounts.create({
       type: 'custom',
       country: 'US',
@@ -68,27 +62,10 @@ serve(async (req) => {
         card_payments: { requested: true },
         transfers: { requested: true },
       },
-      tos_acceptance: {
-        date: Math.floor(Date.now() / 1000),
-        ip: ip,
-      },
       business_type: 'individual',
       business_profile: {
         product_description: 'Selling unused game codes',
       },
-      settings: {
-        payouts: {
-          schedule: {
-            interval: 'manual'
-          }
-        }
-      },
-      requirements: {
-        currently_due: [
-          'individual.verification.document',
-          'individual.verification.additional_document'
-        ]
-      }
     })
 
     console.log('Created Stripe account:', account.id)
@@ -101,10 +78,20 @@ serve(async (req) => {
 
     console.log('Updated profile with Stripe account ID')
 
+    // Create an account link for onboarding
+    const accountLink = await stripe.accountLinks.create({
+      account: account.id,
+      refresh_url: `${req.headers.get('origin')}/dashboard`,
+      return_url: `${req.headers.get('origin')}/dashboard`,
+      type: 'account_onboarding',
+    })
+
+    console.log('Created account link')
+
     return new Response(
       JSON.stringify({ 
         accountId: account.id,
-        verificationUrl: account.requirements?.currently_due || []
+        accountLink: accountLink.url
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
