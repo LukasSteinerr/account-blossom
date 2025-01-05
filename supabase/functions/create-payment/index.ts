@@ -66,20 +66,20 @@ serve(async (req) => {
 
     console.log('Found game code:', gameCode.id)
 
-    const { count, error: countError } = await supabaseAdmin
-      .from('payments')
-      .select('*', { count: 'exact', head: true })
-      .eq('game_code_id', gameCodeId)
-      .eq('payment_status', 'succeeded')
+    // Update game code status to pending
+    const { error: updateError } = await supabaseAdmin
+      .from('game_codes')
+      .update({ 
+        status: 'pending',
+        payment_status: 'pending'
+      })
+      .eq('id', gameCodeId)
+      .eq('status', 'available')
+      .eq('payment_status', 'unpaid')
 
-    if (countError) {
-      console.error('Error checking payment status:', countError)
-      throw new Error('Failed to verify payment status')
-    }
-
-    if (count && count > 0) {
-      console.error('Game code already purchased')
-      throw new Error('Game code already purchased')
+    if (updateError) {
+      console.error('Error updating game code:', updateError)
+      throw new Error('Failed to update game code status')
     }
 
     const amount = Math.round(gameCode.price * 100)
@@ -112,6 +112,7 @@ serve(async (req) => {
 
     console.log('Created checkout session:', session.id)
 
+    // Create payment record
     const { error: paymentError } = await supabaseAdmin
       .from('payments')
       .insert({
@@ -127,23 +128,8 @@ serve(async (req) => {
       throw new Error('Failed to create payment record')
     }
 
-    const { error: updateError } = await supabaseAdmin
-      .from('game_codes')
-      .update({ 
-        stripe_payment_intent_id: session.payment_intent as string,
-        status: 'pending'
-      })
-      .eq('id', gameCodeId)
-      .eq('status', 'available')
-      .eq('payment_status', 'unpaid')
-
-    if (updateError) {
-      console.error('Error updating game code:', updateError)
-      throw new Error('Failed to update game code status')
-    }
-
     return new Response(
-      JSON.stringify({ sessionId: session.id }),
+      JSON.stringify({ url: session.url }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
