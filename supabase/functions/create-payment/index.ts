@@ -27,7 +27,7 @@ serve(async (req) => {
       apiVersion: '2023-10-16',
     })
 
-    // Initialize Supabase client with service role key
+    // Initialize Supabase client with service role key for database operations
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -101,12 +101,12 @@ serve(async (req) => {
 
       console.log('Created Stripe session:', session.id)
 
-      // Update game code status with transaction
+      // Update game code status using RPC call
       const { error: updateError } = await supabaseAdmin.rpc('update_game_code_status', {
         p_game_code_id: gameCodeId,
         p_status: 'pending',
         p_payment_status: 'pending',
-        p_payment_intent_id: session.payment_intent
+        p_payment_intent_id: session.payment_intent as string
       })
 
       if (updateError) {
@@ -125,6 +125,7 @@ serve(async (req) => {
           amount: gameCode.price,
           platform_fee: gameCode.price * 0.05, // 5% platform fee
           payment_intent_id: session.payment_intent as string,
+          payment_status: 'pending'
         })
 
       if (paymentError) {
