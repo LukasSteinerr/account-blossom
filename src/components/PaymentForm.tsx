@@ -14,23 +14,19 @@ export function PaymentForm({ onSuccess, clientSecret }: PaymentFormProps) {
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!stripe || !clientSecret) return;
+    if (!stripe) return;
 
     const redirectToCheckout = async () => {
       try {
-        const { error } = await stripe.redirectToCheckout({
-          sessionId: clientSecret
-        });
+        // Get the checkout URL from the edge function response
+        const checkoutUrl = JSON.parse(clientSecret).url;
         
-        if (error) {
-          console.error('Stripe redirect error:', error);
-          toast({
-            title: "Payment failed",
-            description: error.message,
-            variant: "destructive",
-          });
-          onSuccess(); // Close the dialog
+        if (!checkoutUrl) {
+          throw new Error('No checkout URL provided');
         }
+
+        // Redirect to Stripe Checkout
+        window.location.href = checkoutUrl;
       } catch (e) {
         console.error('Stripe redirect error:', e);
         toast({

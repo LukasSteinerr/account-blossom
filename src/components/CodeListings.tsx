@@ -98,7 +98,7 @@ export function CodeListings() {
       }
 
       setSelectedGameCode(gameCodeId);
-      setClientSecret(data.sessionId);
+      setClientSecret(JSON.stringify(data));
     } catch (error) {
       console.error('Error in handleBuyClick:', error);
       toast({
