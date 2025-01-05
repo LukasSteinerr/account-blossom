@@ -22,15 +22,24 @@ serve(async (req) => {
       throw new Error('Game code ID is required')
     }
 
+    // Initialize Stripe
     const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
     })
 
+    // Initialize Supabase client with service role key
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
     )
 
+    // Get user information
     const authHeader = req.headers.get('Authorization')!
     const token = authHeader.replace('Bearer ', '')
     const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token)
@@ -61,78 +70,90 @@ serve(async (req) => {
       throw new Error('Game code not found or unavailable')
     }
 
-    console.log('Creating checkout session for game code:', gameCode.id)
+    console.log('Found game code:', gameCode.id)
 
-    // Create a Stripe Checkout session with dynamic pricing
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `${gameCode.games.title} Game Code`,
-              description: `Game code for ${gameCode.games.title}`,
+    try {
+      // Create Stripe Checkout session
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `${gameCode.games.title} Game Code`,
+                description: `Game code for ${gameCode.games.title}`,
+              },
+              unit_amount: Math.round(gameCode.price * 100), // Convert price to cents
             },
-            unit_amount: Math.round(gameCode.price * 100), // Convert price to cents
+            quantity: 1,
           },
-          quantity: 1,
+        ],
+        mode: 'payment',
+        success_url: `${req.headers.get('origin')}/dashboard?success=true`,
+        cancel_url: `${req.headers.get('origin')}/dashboard?canceled=true`,
+        metadata: {
+          gameCodeId: gameCode.id,
+          buyerId: user.id,
+          sellerId: gameCode.seller_id,
         },
-      ],
-      mode: 'payment',
-      success_url: `${req.headers.get('origin')}/dashboard?success=true`,
-      cancel_url: `${req.headers.get('origin')}/dashboard?canceled=true`,
-      metadata: {
-        gameCodeId: gameCode.id,
-        buyerId: user.id,
-        sellerId: gameCode.seller_id,
-      },
-    })
-
-    console.log('Created checkout session:', session.id)
-
-    // Update game code status to pending
-    const { error: updateError } = await supabaseAdmin
-      .from('game_codes')
-      .update({ 
-        status: 'pending',
-        payment_status: 'pending',
-        stripe_payment_intent_id: session.payment_intent as string
-      })
-      .eq('id', gameCodeId)
-      .eq('status', 'available')
-      .eq('payment_status', 'unpaid')
-
-    if (updateError) {
-      console.error('Error updating game code:', updateError)
-      throw new Error('Failed to update game code status')
-    }
-
-    // Create payment record
-    const { error: paymentError } = await supabaseAdmin
-      .from('payments')
-      .insert({
-        game_code_id: gameCodeId,
-        buyer_id: user.id,
-        amount: gameCode.price,
-        platform_fee: gameCode.price * 0.05, // 5% platform fee
-        payment_intent_id: session.payment_intent as string,
       })
 
-    if (paymentError) {
-      console.error('Error creating payment record:', paymentError)
-      throw new Error('Failed to create payment record')
-    }
+      console.log('Created Stripe session:', session.id)
 
-    return new Response(
-      JSON.stringify({ url: session.url }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+      // Update game code status
+      const { error: updateError } = await supabaseAdmin
+        .from('game_codes')
+        .update({ 
+          status: 'pending',
+          payment_status: 'pending',
+          stripe_payment_intent_id: session.payment_intent as string
+        })
+        .eq('id', gameCodeId)
+        .eq('status', 'available')
+        .eq('payment_status', 'unpaid')
+
+      if (updateError) {
+        console.error('Error updating game code status:', updateError)
+        throw new Error('Failed to update game code status')
+      }
+
+      console.log('Updated game code status successfully')
+
+      // Create payment record
+      const { error: paymentError } = await supabaseAdmin
+        .from('payments')
+        .insert({
+          game_code_id: gameCodeId,
+          buyer_id: user.id,
+          amount: gameCode.price,
+          platform_fee: gameCode.price * 0.05, // 5% platform fee
+          payment_intent_id: session.payment_intent as string,
+        })
+
+      if (paymentError) {
+        console.error('Error creating payment record:', paymentError)
+        throw new Error('Failed to create payment record')
+      }
+
+      console.log('Created payment record successfully')
+
+      return new Response(
+        JSON.stringify({ url: session.url }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    } catch (stripeError) {
+      console.error('Stripe or database error:', stripeError)
+      throw stripeError
+    }
   } catch (error) {
     console.error('Error in create-payment function:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
+        status: 400 
+      }
     )
   }
 })
