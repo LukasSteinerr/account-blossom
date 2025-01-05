@@ -101,17 +101,13 @@ serve(async (req) => {
 
       console.log('Created Stripe session:', session.id)
 
-      // Update game code status
-      const { error: updateError } = await supabaseAdmin
-        .from('game_codes')
-        .update({ 
-          status: 'pending',
-          payment_status: 'pending',
-          stripe_payment_intent_id: session.payment_intent as string
-        })
-        .eq('id', gameCodeId)
-        .eq('status', 'available')
-        .eq('payment_status', 'unpaid')
+      // Update game code status with transaction
+      const { error: updateError } = await supabaseAdmin.rpc('update_game_code_status', {
+        p_game_code_id: gameCodeId,
+        p_status: 'pending',
+        p_payment_status: 'pending',
+        p_payment_intent_id: session.payment_intent
+      })
 
       if (updateError) {
         console.error('Error updating game code status:', updateError)
