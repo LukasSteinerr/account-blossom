@@ -8,7 +8,6 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -22,18 +21,15 @@ serve(async (req) => {
       throw new Error('Game code ID is required')
     }
 
-    // Initialize Stripe
     const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
     })
 
-    // Initialize Supabase client with service role key to bypass RLS policies
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get the authenticated user
     const authHeader = req.headers.get('Authorization')!
     const token = authHeader.replace('Bearer ', '')
     const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token)
@@ -45,16 +41,12 @@ serve(async (req) => {
 
     console.log('Authenticated user:', user.id)
 
-    // Fetch the game code with seller's Stripe account info
     const { data: gameCode, error: gameCodeError } = await supabaseAdmin
       .from('game_codes')
       .select(`
         *,
         games (
           title
-        ),
-        seller:profiles!seller_id (
-          stripe_account_id
         )
       `)
       .eq('id', gameCodeId)
@@ -72,14 +64,8 @@ serve(async (req) => {
       throw new Error('Game code not found or already purchased')
     }
 
-    if (!gameCode.seller?.stripe_account_id) {
-      console.error('Seller not setup for payments:', gameCode)
-      throw new Error('Seller not setup for payments')
-    }
-
     console.log('Found game code:', gameCode.id)
 
-    // Double-check the game code hasn't been purchased while we were processing
     const { count, error: countError } = await supabaseAdmin
       .from('payments')
       .select('*', { count: 'exact', head: true })
@@ -96,13 +82,9 @@ serve(async (req) => {
       throw new Error('Game code already purchased')
     }
 
-    // Calculate platform fee (5%)
-    const platformFee = Math.round(gameCode.price * 0.05 * 100)
     const amount = Math.round(gameCode.price * 100)
+    console.log('Creating checkout session with amount:', amount)
 
-    console.log('Creating checkout session with amount:', amount, 'and platform fee:', platformFee)
-
-    // Create Stripe Checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -121,29 +103,22 @@ serve(async (req) => {
       mode: 'payment',
       success_url: `${req.headers.get('origin')}/dashboard?success=true`,
       cancel_url: `${req.headers.get('origin')}/dashboard?canceled=true`,
-      payment_intent_data: {
-        application_fee_amount: platformFee,
-        transfer_data: {
-          destination: gameCode.seller.stripe_account_id,
-        },
-        metadata: {
-          gameCodeId,
-          buyerId: user.id,
-          sellerId: gameCode.seller_id,
-        },
+      metadata: {
+        gameCodeId,
+        buyerId: user.id,
+        sellerId: gameCode.seller_id,
       },
     })
 
     console.log('Created checkout session:', session.id)
 
-    // Create payment record
     const { error: paymentError } = await supabaseAdmin
       .from('payments')
       .insert({
         game_code_id: gameCodeId,
         buyer_id: user.id,
         amount: gameCode.price,
-        platform_fee: platformFee / 100,
+        platform_fee: gameCode.price * 0.05,
         payment_intent_id: session.payment_intent as string,
       })
 
@@ -152,7 +127,6 @@ serve(async (req) => {
       throw new Error('Failed to create payment record')
     }
 
-    // Update game code status
     const { error: updateError } = await supabaseAdmin
       .from('game_codes')
       .update({ 

@@ -148,21 +148,18 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
-          stripe_account_id: string | null
           updated_at: string
         }
         Insert: {
           email?: string | null
           full_name?: string | null
           id: string
-          stripe_account_id?: string | null
           updated_at?: string
         }
         Update: {
           email?: string | null
           full_name?: string | null
           id?: string
-          stripe_account_id?: string | null
           updated_at?: string
         }
         Relationships: []
