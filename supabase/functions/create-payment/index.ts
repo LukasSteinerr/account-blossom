@@ -8,6 +8,7 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -41,7 +42,7 @@ serve(async (req) => {
 
     console.log('Authenticated user:', user.id)
 
-    // First, verify the game code is available
+    // Fetch the game code details
     const { data: gameCode, error: gameCodeError } = await supabaseAdmin
       .from('game_codes')
       .select(`
@@ -53,24 +54,16 @@ serve(async (req) => {
       .eq('id', gameCodeId)
       .eq('status', 'available')
       .eq('payment_status', 'unpaid')
-      .maybeSingle()
+      .single()
 
-    if (gameCodeError) {
+    if (gameCodeError || !gameCode) {
       console.error('Error fetching game code:', gameCodeError)
-      throw new Error('Failed to fetch game code')
+      throw new Error('Game code not found or unavailable')
     }
 
-    if (!gameCode) {
-      console.error('Game code not found or not available')
-      throw new Error('Game code not found or already purchased')
-    }
+    console.log('Creating checkout session for game code:', gameCode.id)
 
-    console.log('Found game code:', gameCode.id)
-
-    // Create Stripe checkout session first
-    const amount = Math.round(gameCode.price * 100)
-    console.log('Creating checkout session with amount:', amount)
-
+    // Create a Stripe Checkout session with dynamic pricing
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -78,10 +71,10 @@ serve(async (req) => {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: gameCode.games.title,
+              name: `${gameCode.games.title} Game Code`,
               description: `Game code for ${gameCode.games.title}`,
             },
-            unit_amount: amount,
+            unit_amount: Math.round(gameCode.price * 100), // Convert price to cents
           },
           quantity: 1,
         },
@@ -90,7 +83,7 @@ serve(async (req) => {
       success_url: `${req.headers.get('origin')}/dashboard?success=true`,
       cancel_url: `${req.headers.get('origin')}/dashboard?canceled=true`,
       metadata: {
-        gameCodeId,
+        gameCodeId: gameCode.id,
         buyerId: user.id,
         sellerId: gameCode.seller_id,
       },
@@ -98,7 +91,7 @@ serve(async (req) => {
 
     console.log('Created checkout session:', session.id)
 
-    // After successful session creation, update game code status
+    // Update game code status to pending
     const { error: updateError } = await supabaseAdmin
       .from('game_codes')
       .update({ 
@@ -122,7 +115,7 @@ serve(async (req) => {
         game_code_id: gameCodeId,
         buyer_id: user.id,
         amount: gameCode.price,
-        platform_fee: gameCode.price * 0.05,
+        platform_fee: gameCode.price * 0.05, // 5% platform fee
         payment_intent_id: session.payment_intent as string,
       })
 
