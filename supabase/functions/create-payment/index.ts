@@ -41,6 +41,7 @@ serve(async (req) => {
 
     console.log('Authenticated user:', user.id)
 
+    // First, verify the game code is available
     const { data: gameCode, error: gameCodeError } = await supabaseAdmin
       .from('game_codes')
       .select(`
@@ -66,22 +67,7 @@ serve(async (req) => {
 
     console.log('Found game code:', gameCode.id)
 
-    // Update game code status to pending
-    const { error: updateError } = await supabaseAdmin
-      .from('game_codes')
-      .update({ 
-        status: 'pending',
-        payment_status: 'pending'
-      })
-      .eq('id', gameCodeId)
-      .eq('status', 'available')
-      .eq('payment_status', 'unpaid')
-
-    if (updateError) {
-      console.error('Error updating game code:', updateError)
-      throw new Error('Failed to update game code status')
-    }
-
+    // Create Stripe checkout session first
     const amount = Math.round(gameCode.price * 100)
     console.log('Creating checkout session with amount:', amount)
 
@@ -111,6 +97,23 @@ serve(async (req) => {
     })
 
     console.log('Created checkout session:', session.id)
+
+    // After successful session creation, update game code status
+    const { error: updateError } = await supabaseAdmin
+      .from('game_codes')
+      .update({ 
+        status: 'pending',
+        payment_status: 'pending',
+        stripe_payment_intent_id: session.payment_intent as string
+      })
+      .eq('id', gameCodeId)
+      .eq('status', 'available')
+      .eq('payment_status', 'unpaid')
+
+    if (updateError) {
+      console.error('Error updating game code:', updateError)
+      throw new Error('Failed to update game code status')
+    }
 
     // Create payment record
     const { error: paymentError } = await supabaseAdmin
